@@ -1,0 +1,25 @@
+from typing import Any, Protocol
+
+import numpy as np
+
+Vec3 = np.ndarray  # 3D position vector
+
+
+class DegreeLimited(Protocol):
+    def degree_limit(self) -> int | float: ...
+
+
+class NeighborProtocol(Protocol):
+    id: int
+    data: Any
+    addr: str  # identity hash and lineage tracing
+    pos: Vec3  # spatial position in 3D
+    neighbors: list["NeighborProtocol"]
+
+    is_anchor: bool
+
+    def update_addr(self) -> None: ...
+    def distance_to(self, other: "NeighborProtocol") -> float: ...
+    def can_accept_more_neighbors(self) -> bool: ...
+    def move(self, delta: Vec3) -> None: ...
+    def tick(self) -> None: ...
