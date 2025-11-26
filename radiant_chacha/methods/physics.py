@@ -45,14 +45,16 @@ def compute_gravity(obj: "NeighborBase") -> float:
     # desired neighbors heuristic: prefer up to min(5, degree_limit) to avoid inflating
     try:
         limit = obj.degree_limit()
-        if limit == float("inf"):
-            desired = (
-                10.0  # Any node with infinite degree limit should desire many neighbors
-            )
         if obj.type == "Block":
             desired = min(5.0, float(max(0.0, float(limit))))
         if obj.type == "Point":
             desired = 1.0  # Points should only have one neighbor, and so they should not desire more
+        if limit == float("inf") or obj.type == "Sphere":
+            desired = (
+                10.0  # Any node with infinite degree limit should desire many neighbors
+            )
+        else:
+            desired = float(max(0.0, float(limit)))
     except Exception:
         # I cannot think of the edge case that would cause this except block to be hit, but just in case
         desired = 3.0

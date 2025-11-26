@@ -1,4 +1,3 @@
-# ...existing code...
 """
 Data similarity utilities used to decide neighbor links.
 
@@ -16,9 +15,12 @@ import numpy as np
 from radiant_chacha.methods.movement import (
     distance_to,  # reuse existing distance helper
 )
+from radiant_chacha.utils.log_handler import get_logger
 
 if TYPE_CHECKING:
     from radiant_chacha.core.neighbor_base import NeighborBase
+
+logger = get_logger(__name__, source_file=__file__)
 
 
 def _cosine_similarity(a: "np.ndarray", b: "np.ndarray") -> float:
@@ -75,25 +77,20 @@ def similarity_score(a: Any, b: Any) -> float:
         # numpy vectors
         if np is not None and isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
             if a.shape == b.shape:
-                print("a.shape == b.shape")
                 return _cosine_similarity(a, b)
             # different shapes: try flatten
-            print("different shapes: try flatten")
             return _cosine_similarity(a.flatten(), b.flatten())
 
         # dicts
         if isinstance(a, dict) and isinstance(b, dict):
-            print("dicts")
             return _dict_similarity(a, b)
 
         # bytes/str
         if isinstance(a, (bytes, bytearray)) and isinstance(b, (bytes, bytearray)):
-            print("bytes/bytearray")
             return _string_similarity(
                 a.decode(errors="ignore"), b.decode(errors="ignore")
             )
         if isinstance(a, str) and isinstance(b, str):
-            print("str")
             return _string_similarity(a, b)
 
         # numbers
@@ -103,23 +100,27 @@ def similarity_score(a: Any, b: Any) -> float:
                 return 1.0
             denom = max(abs(a), abs(b), 1.0)
             diff = abs(a - b) / denom
-            print("numbers")
             return float(max(0.0, 1.0 - diff))
 
         # fallback to equality/hash
         if a == b:
-            print("fallback to equality")
+            logger.debug(
+                msg="Similarity score method must fall back to equality because data from both neighbors is equal"
+            )
             return 1.0
         try:
-            print("fallback to hash")
+            logger.debug(
+                msg="Similarity score method must fall back to hash comparison because data from both neighbors is not equal"
+            )
             return 1.0 if hash(a) == hash(b) else 0.0
         except Exception:
-            print("hash exception")
+            logger.warning(msg="Similarity score method experienced a hash exception")
             return 0.0
-    except Exception:
-        print(
-            f"general exception when comparing type: {type(a)}: {a} and type: {type(b)}: {b}"
+    except Exception as e:
+        logger.error(
+            msg=f"Similarity score method experienced a general exception when comparing type: {type(a)}: {a} and type: {type(b)}: {b}"
         )
+        logger.error(msg=f"Similarity score general exception details: {e}")
         return 0.0
 
 

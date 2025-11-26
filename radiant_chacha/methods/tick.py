@@ -3,15 +3,18 @@
 # Default loop step
 # ------------------------------------------------------------------
 
-from pprint import pprint
+from pprint import pformat
 from typing import TYPE_CHECKING
 
 from radiant_chacha.methods.discovery import discover_and_negotiate
 from radiant_chacha.methods.history import record_history
 from radiant_chacha.methods.physics import apply_gravity
+from radiant_chacha.utils.log_handler import get_logger
 
 if TYPE_CHECKING:
     from lunar_biscuit.radiant_chacha.core import NeighborBase
+
+logger = get_logger(__name__, source_file=__file__)
 
 
 def tick(obj: "NeighborBase", dt: float = 1.0, print_stats: bool = False) -> None:
@@ -36,12 +39,11 @@ def tick(obj: "NeighborBase", dt: float = 1.0, print_stats: bool = False) -> Non
     # Apply physics-based movement
     apply_gravity(obj=obj, dt=dt)
 
-    # Optionally print positions and gravity
+    # Optionally log positions and gravity
     if print_stats:
-        print(
-            f"Node {obj.id} ({type(obj).__name__}): Pos={obj.pos} Gravity={obj.gravity:.3f}"
+        logger.info(
+            f"Node {obj.id} ({type(obj)}): Pos={obj.pos} Gravity={float(obj.gravity):.3f}"
         )
-        print("-" * 40)
-        print("History:")
-        pprint(obj.history, width=80, indent=2, compact=False)
-        print("-" * 40)
+        logger.debug("-" * 40)
+        logger.debug(f"History:\n{pformat(obj.history, width=80, indent=2)}")
+        logger.debug("-" * 40)

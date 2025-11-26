@@ -1,12 +1,17 @@
 [project]
 name = "lunar-biscuit"
 version = "0.1.0"
-description = "Add your description here"
+description = "3D pseudo-blockchain simulation with self-organizing nodes"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi>=0.122.0",
     "numpy>=2.3.5",
+    "plotly>=6.5.0",
+    "pydantic>=2.12.5",
+    "streamlit>=1.51.0",
+    "uvicorn>=0.30.0",
 ]
 
 [tool.ruff]
-exclude = ["*.out"]
+exclude = ["*.log"]

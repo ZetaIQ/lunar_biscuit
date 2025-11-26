@@ -1,8 +1,12 @@
 import numpy as np
+
 from radiant_chacha.core.factory import NeighborFactory
 from radiant_chacha.interfaces.block import Block
 from radiant_chacha.interfaces.point import Point
 from radiant_chacha.interfaces.sphere import Sphere
+from radiant_chacha.utils.log_handler import get_logger
+
+logger = get_logger(__name__, source_file=__file__)
 
 
 def test_factory():
@@ -20,16 +24,16 @@ def test_factory():
     assert isinstance(block.pos, np.ndarray)
     assert block.pos.shape == (3,)
 
-    print("Block:", block)
-    print("Point:", point)
-    print("Sphere:", sphere)
+    logger.info("Block: %s", block)
+    logger.info("Point: %s", point)
+    logger.info("Sphere: %s", sphere)
 
     # Check that addr is set and looks like a SHA256 hex string (64 chars)
     for obj in (block, point, sphere):
         assert obj.addr is not None
         assert len(obj.addr) == 64
 
-    print("All tests passed.")
+    logger.info("All tests passed.")
 
 
 if __name__ == "__main__":

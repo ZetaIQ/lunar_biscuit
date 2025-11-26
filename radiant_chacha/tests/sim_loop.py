@@ -1,6 +1,6 @@
 import argparse
 import asyncio
-from pprint import pprint
+from pprint import pformat
 
 import numpy as np
 
@@ -8,10 +8,13 @@ from radiant_chacha.core.factory import NeighborFactory
 from radiant_chacha.interfaces.block import Block
 from radiant_chacha.interfaces.point import Point
 from radiant_chacha.interfaces.sphere import Sphere
+from radiant_chacha.utils.log_handler import get_logger
+
+logger = get_logger(__name__, source_file=__file__)
 
 
 async def simulation(t: int) -> None:
-    print("Starting simulation...")
+    logger.info("Starting simulation...")
     nodes = []
     try:
         factory = NeighborFactory()
@@ -99,19 +102,21 @@ async def simulation(t: int) -> None:
         for task in tasks:
             task.cancel()
     finally:
-        print("\\\n" * 40)
-        print("Simulation ended.")
-        print("Final States:")
+        logger.info("\n" * 3)
+        logger.info("Simulation ended.")
+        logger.info("Final States:")
         for i, node in enumerate(iterable=nodes, start=1):
-            print(
-                f"Node {i} ({type(node).__name__}): Pos={node.pos} Gravity={node.gravity:.3f}"
+            logger.info(
+                f"Node {i} ({type(node)}): {node.addr} Pos={node.pos} Gravity={float(node.gravity):.3f}"
             )
-            print("-" * 40)
-            print(f"History of Node {i} ({type(node).__name__}):")
-            pprint(node.history, width=80, indent=2, compact=False)
-            print("-" * 40)
-            print(
-                f"Total attempts to connect beyond degree limit for Node {i} ({type(node).__name__}): {node.attempts}\n"
+            logger.info("-" * 40)
+            logger.info("Set logging to debug to see full history details.")
+            logger.debug(
+                f"History of Node {i} ({type(node)}):\n{pformat(node.history, width=80, indent=2)}"
+            )
+            logger.info("-" * 40)
+            logger.info(
+                f"Total attempts to connect beyond degree limit for Node {i} ({type(node)}): {node.attempts}"
             )
 
 

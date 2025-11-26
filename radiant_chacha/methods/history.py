@@ -3,12 +3,16 @@
 # ------------------------------------------------------------------
 
 from datetime import datetime, timezone
+from pprint import pformat
 from typing import TYPE_CHECKING
 
 from radiant_chacha.methods.address import update_addr
+from radiant_chacha.utils.log_handler import get_logger
 
 if TYPE_CHECKING:
     from radiant_chacha.core.neighbor_base import NeighborBase
+
+logger = get_logger(__name__, source_file=__file__)
 
 
 def snapshot(obj: "NeighborBase") -> None:
@@ -16,7 +20,7 @@ def snapshot(obj: "NeighborBase") -> None:
     ts = datetime.now(timezone.utc).isoformat()
 
     neighbor_summary = [
-        {"id": nb.id, "type": {nb.type}, "addr": nb.addr} for nb in obj.neighbors
+        {"id": nb.id, "type": nb.type, "addr": nb.addr} for nb in obj.neighbors
     ]
 
     obj.history.append(
@@ -32,6 +36,7 @@ def snapshot(obj: "NeighborBase") -> None:
             "velocity": obj.velocity.copy(),
         }
     )
+    logger.debug(f"Snapshot saved for {obj.addr}: {pformat(obj.history[-1], width=80)}")
 
 
 def record_history(obj: "NeighborBase") -> None:
@@ -47,23 +52,23 @@ def record_history(obj: "NeighborBase") -> None:
         last_neighbors = obj.history[-1].get("neighbors", [])
 
         if current_neighbors != last_neighbors:
-            print("neighbors not equal")
+            logger.debug(f"Neighbors changed for {obj.addr}")
             return True
 
         if (obj.pos != obj.history[-1]["pos"]).all():
-            print("pos not equal")
+            logger.debug(f"Position changed for {obj.addr}")
             return True
 
         if obj.gravity != obj.history[-1]["gravity"]:
-            print("gravity not equal")
+            logger.debug(f"Gravity changed for {obj.addr}")
             return True
 
         if obj.type != obj.history[-1]["type"]:
-            print("type not equal")
+            logger.debug(f"Type changed for {obj.addr}")
             return True
 
         if (obj.velocity != obj.history[-1]["velocity"]).all():
-            print("velocity not equal")
+            logger.debug(f"Velocity changed for {obj.addr}")
             return True
 
         return False
