@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 def tick(obj: "NeighborBase", dt: float = 1.0, print_stats: bool = False) -> None:
     """
-    Each node runs autonomous logic here:
+    Eventually... Each node runs autonomous logic here:
     - Gravity forces
     - Neighbor negotiation
     - Position updates
@@ -32,7 +32,7 @@ def tick(obj: "NeighborBase", dt: float = 1.0, print_stats: bool = False) -> Non
     if print_stats:
         print(
             f"Node {obj.id} ({type(obj).__name__}): Pos={obj.pos} Gravity={obj.gravity:.3f}\n"
-            f"{'-' * 40}\n"
-            f"Node {obj.id} ({type(obj).__name__}): History={pprint(object=obj.history, width=80, indent=2, compact=False, depth=2)}\n"
-            f"{'-' * 40}\n"
         )
+        print(f"{'-' * 40}\nHistory:")
+        pprint(object=obj.history, width=80, indent=2, compact=False, depth=2)
+        print(f"{'-' * 40}\n")

@@ -41,15 +41,19 @@ class NeighborBase(NeighborProtocol, ABC):
     tick_interval: float = 1.0
 
     # Token initialized as None to enforce factory construction
-    _token: Optional[object] = field(
-        default_factory=object, init=False, hash=False, repr=False
-    )
+    _token: Optional[object] = None
 
     # ------------------------------------------------------------------
 
     async def run(self, print_stats=False) -> None:
         tick(obj=self, dt=self.tick_interval, print_stats=print_stats)
         await asyncio.sleep(self.tick_interval)
+        try:
+            while True:
+                tick(obj=self, dt=self.tick_interval, print_stats=print_stats)
+                await asyncio.sleep(self.tick_interval)
+        except asyncio.CancelledError:
+            return
 
     @abstractmethod
     def degree_limit(self) -> int | float:

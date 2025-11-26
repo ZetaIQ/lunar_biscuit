@@ -46,6 +46,6 @@ class NeighborFactory:
             data=data,
             pos=position,
             addr=addr,
-            _token=_factory_token,  # if you want to enforce this pattern
+            _token=_factory_token,  # if you want to enforce factory-only construction
         )
         return obj

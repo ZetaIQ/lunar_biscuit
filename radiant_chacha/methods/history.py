@@ -31,6 +31,7 @@ def snapshot(obj: "NeighborBase") -> None:
 
 
 def record_history(obj: "NeighborBase") -> None:
+    """Record a new history snapshot if state has changed."""
     if len(obj.history) == 0:
         snapshot(obj)  # initial snapshot
 
