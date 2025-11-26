@@ -7,3 +7,6 @@ requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.3.5",
 ]
+
+[tool.ruff]
+exclude = ["*.out"]

@@ -1,3 +1,4 @@
+# ...existing code...
 """
 Data similarity utilities used to decide neighbor links.
 
@@ -11,6 +12,7 @@ import math
 from typing import TYPE_CHECKING, Any, Tuple
 
 import numpy as np
+
 from radiant_chacha.methods.movement import (
     distance_to,  # reuse existing distance helper
 )
@@ -27,7 +29,9 @@ def _cosine_similarity(a: "np.ndarray", b: "np.ndarray") -> float:
     denom = np.linalg.norm(a_f) * np.linalg.norm(b_f)
     if denom == 0:
         return 0.0
-    return float(max(-1.0, min(1.0, float(np.dot(a_f, b_f) / denom))) * 0.5 + 0.5)
+    cosine = np.dot(a_f, b_f) / denom
+    # rescale cosine from [-1,1] to [0,1]
+    return float((cosine + 1.0) * 0.5)
 
 
 def _dict_similarity(a: dict, b: dict) -> float:
@@ -54,7 +58,7 @@ def _string_similarity(a: str, b: str) -> float:
         return 1.0
     if not a or not b:
         return 0.0
-    seq = difflib.SequenceMatcher(a=a, b=b)
+    seq = difflib.SequenceMatcher(None, a, b)
     return float(seq.ratio())
 
 
@@ -71,20 +75,25 @@ def similarity_score(a: Any, b: Any) -> float:
         # numpy vectors
         if np is not None and isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
             if a.shape == b.shape:
+                print("a.shape == b.shape")
                 return _cosine_similarity(a, b)
             # different shapes: try flatten
+            print("different shapes: try flatten")
             return _cosine_similarity(a.flatten(), b.flatten())
 
         # dicts
         if isinstance(a, dict) and isinstance(b, dict):
+            print("dicts")
             return _dict_similarity(a, b)
 
         # bytes/str
         if isinstance(a, (bytes, bytearray)) and isinstance(b, (bytes, bytearray)):
+            print("bytes/bytearray")
             return _string_similarity(
                 a.decode(errors="ignore"), b.decode(errors="ignore")
             )
         if isinstance(a, str) and isinstance(b, str):
+            print("str")
             return _string_similarity(a, b)
 
         # numbers
@@ -94,16 +103,23 @@ def similarity_score(a: Any, b: Any) -> float:
                 return 1.0
             denom = max(abs(a), abs(b), 1.0)
             diff = abs(a - b) / denom
+            print("numbers")
             return float(max(0.0, 1.0 - diff))
 
         # fallback to equality/hash
         if a == b:
+            print("fallback to equality")
             return 1.0
         try:
+            print("fallback to hash")
             return 1.0 if hash(a) == hash(b) else 0.0
         except Exception:
+            print("hash exception")
             return 0.0
     except Exception:
+        print(
+            f"general exception when comparing type: {type(a)}: {a} and type: {type(b)}: {b}"
+        )
         return 0.0
 
 
@@ -125,20 +141,10 @@ def should_connect(
 
     Returns (should_connect: bool, score: float)
     """
-    # Pull candidate data fields heuristically
-    data_a = getattr(obj, "data", None)
-    data_b = getattr(other, "data", None)
-    # Attempt other common field names
-    if data_a is None:
-        for name in ("payload", "content", "value", "features"):
-            data_a = getattr(obj, name, None)
-            if data_a is not None:
-                break
-    if data_b is None:
-        for name in ("payload", "content", "value", "features"):
-            data_b = getattr(other, name, None)
-            if data_b is not None:
-                break
+    # Prefer the formal protocol attribute 'data' but fall back to common legacy names
+    data_a = obj.data
+
+    data_b = other.data
 
     data_sim = similarity_score(data_a, data_b)
 
@@ -149,8 +155,8 @@ def should_connect(
         dist = math.inf
 
     # choose normalization radius
-    radius_a = getattr(obj, "influence_radius", None)
-    radius_b = getattr(other, "influence_radius", None)
+    radius_a = obj.influence_radius
+    radius_b = other.influence_radius
     radius = None
     if isinstance(radius_a, (int, float)) and isinstance(radius_b, (int, float)):
         radius = max(1.0, (radius_a + radius_b) / 2.0)

@@ -53,6 +53,7 @@ def add_neighbor(obj: "NeighborBase", other: "NeighborBase") -> bool:
       - rejects adding self
       - rejects duplicates
       - rejects if the receiver has reached its degree_limit()
+      - adds to attempts counter if degree limit is reached
 
     If the checks pass, `other` is appended to obj.neighbors.
 
@@ -75,6 +76,7 @@ def add_neighbor(obj: "NeighborBase", other: "NeighborBase") -> bool:
         return False
 
     if not can_accept_more_neighbors(obj=obj):
+        obj.attempts += 1
         return False
 
     obj.neighbors.append(other)
@@ -150,7 +152,7 @@ def stability(obj: "NeighborBase") -> float:
 
 def competition(obj: "NeighborBase") -> float:
     """
-    Measure how much the node exceeds its allowed neighbor degree.
+    Measure how much an object's connection attempts exceed its degree limit.
 
     Positive values indicate the node currently has more neighbors than its
     degree_limit(); zero indicates it is within its limit.
@@ -158,13 +160,12 @@ def competition(obj: "NeighborBase") -> float:
     Parameters
     ----------
     obj : NeighborBase
-        Node exposing neighbors (list-like) and degree_limit().
+        Node exposing attemps (int) and degree_limit().
 
     Returns
     -------
     float
-        max(0, len(obj.neighbors) - obj.degree_limit()) as float.
+        max(0, len(obj.attempts) - obj.degree_limit()) as float.
     """
-    active = len(obj.neighbors)
     limit = obj.degree_limit()
-    return float(max(0, active - limit))
+    return float(max(0, obj.attempts - limit))

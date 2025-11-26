@@ -3,20 +3,74 @@ from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
+
 from radiant_chacha.core.protocol import NeighborProtocol, Vec3
 from radiant_chacha.methods.tick import tick
+
+if TYPE_CHECKING:
+    from radiant_chacha.core import NeighborFactory
 
 
 @dataclass
 class NeighborBase(NeighborProtocol, ABC):
+    """
+    NeighborBase: Base class for all neighbor types (Block, Point, Sphere)
+    Provides common attributes and methods.
+    Enforces factory-based construction.
+
+
+    :param id: Integer ID granted by NeighborFactory
+    :type id: int
+    :param data: Arbitrary data payload
+    :type data: Any
+    :param factory: Reference to the NeighborFactory that created this node
+    :type factory: NeighborFactory
+    :param addr: SHA-256 address string
+    :type addr: str
+    :param attempts: Integer count of connection attempts that have exceeded degree limit
+    :type attempts: int
+    :param connection_threshold: Float [0,1] for connection acceptance
+    :type connection_threshold: float
+    :param influence_radius: Float [0,1]|inf(experimental) for influence calculations
+    :type influence_radius: float
+    :param pos: 3D position vector (numpy ndarray)
+    :type pos: Vec3
+    :param velocity: 3D velocity vector (numpy ndarray)
+    :type velocity: Vec3
+    :param gravity: Scalar gravity value
+    :type gravity: float
+    :param neighbors: List of connected NeighborProtocol instances
+    :type neighbors: list[NeighborProtocol]
+    :param is_anchor: Boolean indicating if node is an anchor
+    :type is_anchor: bool
+    :param history: List of state snapshots for history tracking
+    :type history: list[dict[str, Any]]
+    :param STABILITY_WINDOW: Max history length for stability calculations
+    :type STABILITY_WINDOW: int
+    :param tick_interval: Float seconds between ticks
+    :type tick_interval: float
+    """
+
     id: int
     data: Any
+    factory: "NeighborFactory"
 
     # --- Identity Hash ---
     addr: str = ""  # SHA-256 string (set at init)
+
+    # --- Attempt Counter ---
+    attempts: int = 0
+
+    # --- Connection Threshold (should be a float from 0-1, lower is more permissive) ---
+    connection_threshold: float = field(default_factory=float)
+
+    # ---
+    # Influence Radius (should be a float from 0-1, high is more influential, inf is experiemental)
+    # ---
+    influence_radius: float = field(default_factory=float)
 
     # --- Spatial Position ---
     pos: Vec3 = field(default_factory=lambda: np.zeros(3, dtype=float))

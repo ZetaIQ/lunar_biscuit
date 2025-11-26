@@ -15,12 +15,16 @@ def snapshot(obj: "NeighborBase") -> None:
     """Save full state snapshot into history dict."""
     ts = datetime.now(timezone.utc).isoformat()
 
+    neighbor_summary = [
+        {"id": nb.id, "type": {nb.type}, "addr": nb.addr} for nb in obj.neighbors
+    ]
+
     obj.history.append(
         {
             "idx": len(obj.history),  # initial snapshot is index 0
             "timestamp": ts,
             "addr": obj.addr,
-            "neighbors": obj.neighbors,
+            "neighbors": neighbor_summary,
             "pos": obj.pos.copy(),
             "data": obj.data,
             "gravity": obj.gravity,
@@ -36,7 +40,13 @@ def record_history(obj: "NeighborBase") -> None:
         snapshot(obj)  # initial snapshot
 
     def _has_changed() -> bool:
-        if obj.neighbors != obj.history[-1]["neighbors"]:
+        # compare neighbor summaries (not object lists) to avoid recursion
+        current_neighbors = [
+            {"id": nb.id, "type": nb.type, "addr": nb.addr} for nb in obj.neighbors
+        ]
+        last_neighbors = obj.history[-1].get("neighbors", [])
+
+        if current_neighbors != last_neighbors:
             print("neighbors not equal")
             return True
 
