@@ -14,7 +14,7 @@ def update_addr(obj: "NeighborBase") -> None:
     Compute SHA-256 hash representing this node's state.
     """
     h = hashlib.sha256()
-    h.update(str(obj.id).encode())
+    h.update(str(obj.addr).encode())
     h.update(str(obj.data).encode())
     h.update(obj.pos.tobytes())
 

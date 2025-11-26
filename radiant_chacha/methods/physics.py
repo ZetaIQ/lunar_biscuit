@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 
 import numpy as np
+
 from radiant_chacha.methods.movement import competition, stability
 
 if TYPE_CHECKING:
@@ -10,13 +11,21 @@ if TYPE_CHECKING:
 def compute_gravity(obj: "NeighborBase") -> float:
     """
     Compute a scalar "gravity" value for a node based on internal heuristics.
+    Gravity is a values which represents how strongly a node attracts other nodes.
 
     The gravity is a simple heuristic combining:
       - competition (positive when the node has more neighbors than allowed)
       - stability (average recent movement; higher stability reduces gravity)
+      - deficit_score (positive when the node has fewer neighbors than desired to encourage movement to find neighbors)
 
     Formula implemented:
-      gravity = competition - 0.5 * stability
+      gravity = competition - 0.5 * stability + 0.5 * deficit_score
+    The logic of this formula is that high competition indicates that many nodes are attempting to connect to the subject node.
+    High stability indicates that the node has a stable position. The combination of high competition and high stability suggests high "gravitational pull".
+    Low competition and high stability suggest a stable node with few connections "interested" in attaching to the subject node, resulting in lower gravity.
+    High competition and low stability suggest a node that is attracting connections but is unstable, leading to moderate gravity.
+    Low competition and low stability suggest a node that is neither attracting connections nor stable, resulting in low gravity.
+    The deficit_score encourages nodes with neighbors below their degree limit to have a compensatory increase in gravity, as all nodes should have more than 0 gravity.
     The result is clamped to [0.0, 20.0] to avoid extreme steps.
 
     Parameters
@@ -33,7 +42,24 @@ def compute_gravity(obj: "NeighborBase") -> float:
     s: float = stability(obj=obj)
     c: float = competition(obj=obj)
 
-    gravity: float = c - 0.5 * s
+    # desired neighbors heuristic: prefer up to min(5, degree_limit) to avoid inflating
+    try:
+        limit = obj.degree_limit()
+        if limit == float("inf"):
+            desired = (
+                10.0  # Any node with infinite degree limit should desire many neighbors
+            )
+        if obj.type == "Block":
+            desired = min(5.0, float(max(0.0, float(limit))))
+        if obj.type == "Point":
+            desired = 1.0  # Points should only have one neighbor, and so they should not desire more
+    except Exception:
+        # I cannot think of the edge case that would cause this except block to be hit, but just in case
+        desired = 3.0
+
+    deficit = max(0.0, desired - float(len(obj.neighbors)))
+
+    gravity: float = c - 0.5 * s + 0.5 * deficit
 
     # Clamp to reasonable bounds
     gravity = max(0.0, min(20.0, gravity))
