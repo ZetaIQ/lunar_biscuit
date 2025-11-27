@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Launch the simulation API and Vite dev server side-by-side.
+
+set -euo pipefail
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
+MAIN_PID=""
+VITE_PID=""
+
+cleanup() {
+	echo "\n[-] Shutting down services..."
+	if [[ -n "$VITE_PID" ]] && kill -0 "$VITE_PID" 2>/dev/null; then
+		kill "$VITE_PID" 2>/dev/null || true
+		wait "$VITE_PID" 2>/dev/null || true
+	fi
+	if [[ -n "$MAIN_PID" ]] && kill -0 "$MAIN_PID" 2>/dev/null; then
+		kill "$MAIN_PID" 2>/dev/null || true
+		wait "$MAIN_PID" 2>/dev/null || true
+	fi
+}
+trap cleanup EXIT
+
+echo "[*] Starting Lunar Biscuit API server..."
+python main.py &
+MAIN_PID=$!
+
+echo "[*] Starting Vite visualizer dev server..."
+npm run dev:visualizer &
+VITE_PID=$!
+
+echo "[*] Services are running (API PID=$MAIN_PID, Vite PID=$VITE_PID). Press Ctrl+C to stop."
+
+# Wait until one of the processes exits
+wait -n "$MAIN_PID" "$VITE_PID"

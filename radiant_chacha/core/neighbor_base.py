@@ -67,8 +67,9 @@ class NeighborBase(NeighborProtocol, ABC):
     # --- Connection Threshold (should be a float from 0-1, lower is more permissive) ---
     connection_threshold: float = field(default_factory=float)
 
-    # ---
-    # Influence Radius (should be a float from 0-1, high is more influential, inf is experiemental)
+    # --- Influence Radius (geometric reach for proximity decay in similarity/should_connect).
+    # Higher values = nodes stay connected over greater spatial distances.
+    # Used in should_connect() to normalize distance: proximity = 1 - (dist / (radius * 2))
     # ---
     influence_radius: float = field(default_factory=float)
 

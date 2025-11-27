@@ -7,13 +7,14 @@ from typing import Optional
 # Usage: from radiant_chacha.utils.log_handler import get_logger
 #        logger = get_logger(__name__, source_file=__file__)
 #
-# Creates two handlers:
-#  - StreamHandler to stdout
-#  - FileHandler to logs/app/... or logs/tests/... depending on source_file path
+# Creates handlers based on LOG_DESTINATION config:
+#  - LOG_DESTINATION="stdout": StreamHandler to stdout only
+#  - LOG_DESTINATION="file": FileHandler to logs/app/... or logs/tests/... only
+#  - LOG_DESTINATION="both": Both StreamHandler and FileHandler (default)
 #
 # File naming: <YYYY-MM-DD>-<file-name>.log placed under logs/app or logs/tests (UTC date)
 # Global log level (configurable)
-from radiant_chacha.config import LOG_LEVEL
+from radiant_chacha.config import LOG_DESTINATION, LOG_LEVEL
 
 
 def set_log_level(level: int) -> None:
@@ -35,7 +36,7 @@ def get_logger(
     level: Optional[int] = None,
 ) -> logging.Logger:
     """
-    Return a configured logger writing to stdout and a per-module file.
+    Return a configured logger based on LOG_DESTINATION config.
 
     Parameters
     ----------
@@ -52,7 +53,10 @@ def get_logger(
     Returns
     -------
     logging.Logger
-        Configured logger with StreamHandler and FileHandler.
+        Configured logger with handlers based on LOG_DESTINATION config.
+        - "stdout": StreamHandler only
+        - "file": FileHandler only
+        - "both": StreamHandler and FileHandler (default)
     """
     if level is None:
         level = LOG_LEVEL
@@ -67,42 +71,46 @@ def get_logger(
     logger.setLevel(level)
     logger.propagate = False
 
-    # Stream handler (stdout)
-    sh = logging.StreamHandler()
-    sh.setLevel(level)
     formatter = logging.Formatter("%(asctime)sZ %(levelname)-8s %(name)s: %(message)s")
     # Use UTC timestamps
     formatter.converter = lambda *args: datetime.now(timezone.utc).timetuple()
-    sh.setFormatter(formatter)
-    logger.addHandler(sh)
 
-    # Determine logfile path
-    # Project root (two levels up from this file): lunar_biscuit/
-    project_root = Path(__file__).resolve().parents[2]
-    logs_root = project_root / "logs"
-    inferred_tests = False
-    file_basename = (
-        Path(source_file).name if source_file else (name.replace(".", "_") + ".log")
-    )
+    # Stream handler (stdout) - add if LOG_DESTINATION is "stdout" or "both"
+    if LOG_DESTINATION in ("stdout", "both"):
+        sh = logging.StreamHandler()
+        sh.setLevel(level)
+        sh.setFormatter(formatter)
+        logger.addHandler(sh)
 
-    if for_tests is None and source_file:
-        if "radiant_chacha/tests" in str(Path(source_file).as_posix()):
+    # File handler - add if LOG_DESTINATION is "file" or "both"
+    if LOG_DESTINATION in ("file", "both"):
+        # Determine logfile path
+        # Project root (two levels up from this file): lunar_biscuit/
+        project_root = Path(__file__).resolve().parents[2]
+        logs_root = project_root / "logs"
+        inferred_tests = False
+        file_basename = (
+            Path(source_file).name if source_file else (name.replace(".", "_") + ".log")
+        )
+
+        if for_tests is None and source_file:
+            if "radiant_chacha/tests" in str(Path(source_file).as_posix()):
+                inferred_tests = True
+        elif for_tests is True:
             inferred_tests = True
-    elif for_tests is True:
-        inferred_tests = True
 
-    subdir = "tests" if inferred_tests else "app"
-    logs_dir = logs_root / subdir
-    _ensure_dir(logs_dir)
+        subdir = "tests" if inferred_tests else "app"
+        logs_dir = logs_root / subdir
+        _ensure_dir(logs_dir)
 
-    # Use date-only filename so logs append per day (UTC date)
-    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    logfile = logs_dir / f"{date_str}-{file_basename.replace('.', '_')}.log"
+        # Use date-only filename so logs append per day (UTC date)
+        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        logfile = logs_dir / f"{date_str}-{file_basename.replace('.', '_')}.log"
 
-    # FileHandler defaults to append mode, but set explicitly for clarity
-    fh = logging.FileHandler(logfile, mode="a", encoding="utf-8")
-    fh.setLevel(level)
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
+        # FileHandler defaults to append mode, but set explicitly for clarity
+        fh = logging.FileHandler(logfile, mode="a", encoding="utf-8")
+        fh.setLevel(level)
+        fh.setFormatter(formatter)
+        logger.addHandler(fh)
 
     return logger

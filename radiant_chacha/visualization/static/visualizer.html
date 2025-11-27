@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Lunar Biscuit Visualizer</title>
+  <style>
+    :root {
+      --table-panel-height: 45vh;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: linear-gradient(180deg, #ced0d6 0%, #ced0d6 67%, #3e499e 100%);
+      color: #f5f5f5;
+      font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+    }
+    .panel {
+      position: absolute;
+      z-index: 10;
+      background: rgba(5, 6, 7, 0.78);
+      padding: 12px 18px;
+      border-radius: 10px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    #overlay {
+      top: 12px;
+      left: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: min(320px, calc(100vw - 24px));
+    }
+    #overlay h1 {
+      margin: 0 0 4px 0;
+      font-size: 18px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #e4e8ff;
+    }
+    #overlay h1 span {
+      color: #8fb2ff;
+    }
+    #stats {
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    #status {
+      margin-top: 8px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #9fb5ff;
+    }
+    .connector-controls,
+    .motion-controls {
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .connector-controls .field-label,
+    .motion-controls .field-label {
+      margin-bottom: 2px;
+    }
+    .connector-controls .control-row,
+    .motion-controls .control-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    #connector-thickness {
+      width: 140px;
+      accent-color: #8fb2ff;
+    }
+    .checkbox-field.inline {
+      gap: 6px;
+      font-size: 12px;
+    }
+    .connector-slider,
+    .motion-slider {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .motion-value {
+      font-size: 11px;
+      color: #d5dcff;
+      min-width: 40px;
+      text-align: right;
+    }
+    .motion-hint {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.7);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-start;
+    }
+    .secondary-button {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #f5f5f5;
+    }
+    .secondary-button:hover {
+      background: rgba(255, 255, 255, 0.14);
+    }
+    .panel-header {
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #8fb2ff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .panel-toggle {
+      border: none;
+      background: rgba(255, 255, 255, 0.08);
+      color: #f5f5f5;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .panel-toggle:hover {
+      background: rgba(255, 255, 255, 0.16);
+    }
+    .overlay-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    #open-node-form,
+    #pause-visualizer {
+      flex: 1;
+      min-width: 120px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.06);
+      color: #f5f5f5;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    #open-node-form:hover,
+    #pause-visualizer:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+    #pause-visualizer.active {
+      background: rgba(255, 153, 102, 0.22);
+      border-color: rgba(255, 153, 102, 0.5);
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 6px;
+      width: 100%;
+    }
+    form label {
+      display: block;
+      width: 100%;
+      margin: 0;
+    }
+    form label + label {
+      margin-top: 4px;
+    }
+    .field-label {
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #9fb5ff;
+      margin-bottom: 3px;
+      display: block;
+    }
+    select,
+    input,
+    textarea,
+    button {
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #f5f5f5;
+      font-size: 13px;
+      padding: 8px 10px;
+      font-family: inherit;
+    }
+    textarea {
+      min-height: 72px;
+      resize: vertical;
+    }
+    .triple-inputs,
+    .double-inputs {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      width: 100%;
+    }
+    button {
+      cursor: pointer;
+      background: linear-gradient(135deg, #4c8bf5, #8fb2ff);
+      border: none;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .form-hint {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.68);
+      margin: 0;
+    }
+    .form-status {
+      font-size: 12px;
+      min-height: 16px;
+    }
+    .form-status.error {
+      color: #ff8a8a;
+    }
+    .form-status.success {
+      color: #7cf5a1;
+    }
+    .checkbox-field input[type="checkbox"] {
+      width: auto;
+    }
+    #table-panel {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      height: var(--table-panel-height);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      border-radius: 18px;
+      transition: opacity 0.2s ease, transform 0.25s ease;
+    }
+    #table-panel.collapsed {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(calc(100% + 32px));
+    }
+    .table-wrapper {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .table-wrapper table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .table-resizer {
+      width: 100%;
+      height: 10px;
+      cursor: row-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.45);
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      user-select: none;
+    }
+    body.resizing-table {
+      cursor: row-resize;
+      user-select: none;
+    }
+    th, td {
+      padding: 6px 8px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+    #tooltip {
+      position: fixed;
+      pointer-events: none;
+      background: rgba(12, 15, 20, 0.92);
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 12px;
+      line-height: 1.4;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.35);
+      display: none;
+    }
+    .table-tab {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 10px;
+      z-index: 11;
+      padding: 6px 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(5, 6, 7, 0.88);
+      color: #d8e0ff;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .table-tab.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 6, 10, 0.8);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 20;
+    }
+    #modal-backdrop.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #history-panel {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      width: min(360px, calc(100vw - 24px));
+      max-height: 65vh;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 12;
+    }
+    #history-panel.hidden {
+      display: none;
+    }
+    .history-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .history-meta {
+      font-size: 12px;
+      color: #a5b7ff;
+      letter-spacing: 0.04em;
+    }
+    .history-stream {
+      flex: 1;
+      min-height: 160px;
+      overflow: auto;
+      padding-right: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .history-entry {
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .history-entry:last-child {
+      border-bottom: none;
+    }
+    .history-empty {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      margin: 0;
+    }
+    #history-close {
+      border: none;
+      background: rgba(255, 255, 255, 0.08);
+      color: #f5f5f5;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .neighbor-chip {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      margin-right: 4px;
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+    }
+    #control-panel {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 30;
+    }
+    #control-panel.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-card {
+      width: min(900px, 90vw);
+      max-height: 90vh;
+      overflow-y: auto;
+      background: rgba(5, 6, 7, 0.9);
+      border-radius: 18px;
+      padding: 24px 28px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 25px 65px rgba(0, 0, 0, 0.45);
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .modal-header h2 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #b7c7ff;
+    }
+    .modal-close {
+      border: none;
+      background: rgba(255, 255, 255, 0.08);
+      color: #f5f5f5;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .checkbox-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    @media (max-width: 720px) {
+      .modal-card {
+        width: 94vw;
+        padding: 18px;
+      }
+      .triple-inputs,
+      .double-inputs {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="overlay" class="panel">
+    <h1>🌙 <span>Lunar Biscuit</span></h1>
+    <div id="stats">
+      Nodes: <span id="node-count">0</span><br />
+      Avg gravity: <span id="avg-gravity">0.000</span>
+    </div>
+    <div id="status">Connecting...</div>
+    <div class="overlay-actions">
+      <button id="open-node-form">Create Node</button>
+      <button id="pause-visualizer" class="secondary-button" type="button">Pause</button>
+    </div>
+    <div class="connector-controls">
+      <span class="field-label">Connectors</span>
+      <div class="control-row">
+        <label class="checkbox-field inline">
+          <input id="connector-visible" type="checkbox" checked />
+          <span>Show</span>
+        </label>
+        <label class="connector-slider">
+          <span>Width</span>
+          <input type="range" id="connector-thickness" min="0.3" max="1.8" step="0.1" value="0.3" />
+        </label>
+      </div>
+    </div>
+    <div class="motion-controls">
+      <span class="field-label">Motion smoothing</span>
+      <div class="control-row">
+        <label class="motion-slider">
+          <span>Ease</span>
+          <input type="range" id="motion-speed" min="0" max="1.5" step="0.1" value="0.7" />
+          <span class="motion-value" id="motion-speed-value">0.7s</span>
+        </label>
+        <span class="motion-hint">0 = instant teleport, higher = longer travel.</span>
+      </div>
+    </div>
+  </div>
+  <div id="table-panel" class="panel">
+    <div class="panel-header">
+      <span>Node Snapshot</span>
+      <button id="collapse-table" class="panel-toggle" type="button">Hide</button>
+    </div>
+    <div id="table-resizer" class="table-resizer">⋮</div>
+    <div class="table-wrapper">
+      <table id="node-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Type</th>
+            <th>Addr</th>
+            <th>Data</th>
+            <th>Data Type</th>
+            <th>Attempts</th>
+            <th>Conn. Threshold</th>
+            <th>Influence Radius</th>
+            <th>Position</th>
+            <th>Velocity</th>
+            <th>Gravity</th>
+            <th>Neighbors</th>
+            <th>Anchor?</th>
+            <th>Stability Window</th>
+            <th>Tick Interval</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="15">Waiting for data…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <button id="table-tab" class="table-tab" type="button">Show Nodes</button>
+  <div id="history-panel" class="panel history-panel hidden">
+    <div class="history-header">
+      <div>
+        <div id="history-node-label" class="field-label" style="margin-bottom:2px;">Click a node</div>
+        <div id="history-node-addr" class="history-meta"></div>
+      </div>
+      <button id="history-close" type="button" aria-label="Close history">×</button>
+    </div>
+    <div id="history-stream" class="history-stream">
+      <p class="history-empty">Select a node in the scene to begin streaming its history.</p>
+    </div>
+  </div>
+  <div id="modal-backdrop"></div>
+  <div id="control-panel">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Create Node</h2>
+        <button id="close-node-form" class="modal-close" type="button">×</button>
+      </div>
+      <form id="node-form">
+      <label>
+        <span class="field-label">Node Type</span>
+        <select name="nodeType" required>
+          <option value="Block">Block</option>
+          <option value="Point">Point</option>
+          <option value="Sphere">Sphere</option>
+        </select>
+      </label>
+      <label>
+        <span class="field-label">Data Format</span>
+        <select name="dataFormat">
+          <option value="json">JSON</option>
+          <option value="ndarray">NumPy ndarray</option>
+          <option value="bytes">Bytes (base64)</option>
+          <option value="bytearray">Bytearray (base64)</option>
+        </select>
+      </label>
+      <label>
+        <span class="field-label">Position (optional)</span>
+        <div class="triple-inputs">
+          <input name="posX" type="number" step="any" placeholder="X" />
+          <input name="posY" type="number" step="any" placeholder="Y" />
+          <input name="posZ" type="number" step="any" placeholder="Z" />
+        </div>
+      </label>
+      <label>
+        <span class="field-label">Velocity (optional)</span>
+        <div class="triple-inputs">
+          <input name="velX" type="number" step="any" placeholder="VX" />
+          <input name="velY" type="number" step="any" placeholder="VY" />
+          <input name="velZ" type="number" step="any" placeholder="VZ" />
+        </div>
+      </label>
+      <label>
+        <span class="field-label">Data Payload (optional)</span>
+        <textarea name="nodeData" placeholder='{"payload": 42}'></textarea>
+      </label>
+      <label>
+        <span class="field-label">Connection / Influence</span>
+        <div class="double-inputs">
+          <input name="connectionThreshold" type="number" step="any" placeholder="Connection threshold" />
+          <input name="influenceRadius" type="number" step="any" placeholder="Influence radius" />
+        </div>
+      </label>
+      <label>
+        <span class="field-label">Gravity / Tick Interval</span>
+        <div class="double-inputs">
+          <input name="gravity" type="number" step="any" placeholder="Gravity" />
+          <input name="tickInterval" type="number" step="any" placeholder="Tick interval" />
+        </div>
+      </label>
+      <label>
+        <span class="field-label">Attempts / Stability Window</span>
+        <div class="double-inputs">
+          <input name="attempts" type="number" step="1" placeholder="Attempts" />
+          <input name="stabilityWindow" type="number" step="1" placeholder="Stability window" />
+        </div>
+      </label>
+      <label class="checkbox-field">
+        <span class="field-label">Anchor Node?</span>
+        <input name="isAnchor" type="checkbox" />
+      </label>
+      <p class="form-hint">JSON accepts any valid JSON. ndarray expects a nested list. Bytes/bytearray require base64 strings.</p>
+      <div class="form-actions">
+        <button type="submit">Create Node</button>
+        <button type="button" id="reset-node-form" class="secondary-button">Reset Form</button>
+      </div>
+      <div id="form-status" class="form-status"></div>
+      </form>
+    </div>
+  </div>
+  <canvas id="canvas"></canvas>
+  <div id="tooltip"></div>
+  <script type="module" src="/visualizer_static/dist/visualizer.js"></script>
+</body>
+</html>

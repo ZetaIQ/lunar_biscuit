@@ -1,0 +1,27 @@
+{
+  "name": "lunar_biscuit",
+  "version": "1.0.0",
+  "description": "1. Start the simulation service:",
+  "main": "index.js",
+  "scripts": {
+    "dev:visualizer": "vite dev --host 0.0.0.0 --port 5173",
+    "build:visualizer": "vite build",
+    "preview:visualizer": "vite preview",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZetaIQ/lunar_biscuit.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ZetaIQ/lunar_biscuit/issues"
+  },
+  "homepage": "https://github.com/ZetaIQ/lunar_biscuit#readme",
+  "dependencies": {
+    "three": "^0.181.2",
+    "vite": "^7.2.4"
+  }
+}

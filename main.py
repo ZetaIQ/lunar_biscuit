@@ -1,65 +1,61 @@
 """
 Main entry point for Lunar Biscuit.
-Manages the simulation loop and REST API server.
+Runs the API server with self-ticking nodes in the background.
 """
 
+import asyncio
 import signal
 import sys
 import threading
-import time
 from typing import Optional
 
 import uvicorn
 
 from radiant_chacha.api.json_rpc import app, set_factory
 from radiant_chacha.core.factory import NeighborFactory
-from radiant_chacha.methods.tick import tick
 from radiant_chacha.utils.log_handler import get_logger
 
 logger = get_logger(__name__, source_file=__file__)
 
 
-class SimulationLoop:
-    """Manages the background simulation loop."""
+class AsyncEventLoopThread:
+    """Runs an asyncio event loop in a background thread."""
 
-    def __init__(self, factory: NeighborFactory, tick_interval: float = 0.1):
-        self.factory = factory
-        self.tick_interval = tick_interval
-        self.running = False
+    def __init__(self):
+        self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.thread: Optional[threading.Thread] = None
+        self.running = False
 
-    def start(self) -> None:
-        """Start the simulation loop in a background thread."""
-        if self.running:
-            logger.warning("[!] Simulation already running")
-            return
-
+    def start(self) -> asyncio.AbstractEventLoop:
+        """Start the event loop in a background thread and return it."""
         self.running = True
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
         self.thread.start()
-        logger.info("[*] Simulation loop started")
+        # Wait for the loop to be created
+        while self.loop is None:
+            pass
+        logger.info("[*] Async event loop started")
+        return self.loop
 
     def stop(self) -> None:
-        """Stop the simulation loop."""
+        """Stop the event loop."""
+        if self.loop and self.loop.is_running():
+            self.loop.call_soon_threadsafe(self.loop.stop)
         self.running = False
         if self.thread:
             self.thread.join(timeout=5)
-        logger.info("[*] Simulation loop stopped")
+        logger.info("[*] Async event loop stopped")
 
     def _run_loop(self) -> None:
-        """Run the simulation loop (intended to run in a background thread)."""
+        """Run the event loop."""
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
         try:
-            while self.running:
-                # Tick all nodes
-                for node in list(self.factory.nodes):
-                    try:
-                        tick(obj=node, dt=self.tick_interval, print_stats=False)
-                    except Exception as e:
-                        logger.exception(f"[!!] Error ticking node {node.id}: {e}")
-
-                time.sleep(self.tick_interval)
+            self.loop.run_forever()
         except Exception as e:
-            logger.exception(f"[!!] Simulation loop error: {e}")
+            logger.exception(f"[!!] Event loop error: {e}")
+        finally:
+            self.loop.close()
 
 
 def run_api_server(host: str = "127.0.0.1", port: int = 8401) -> None:
@@ -73,23 +69,25 @@ def main() -> None:
     """
     Main entry point.
     Starts:
-      1. Simulation loop (background thread)
-      2. JSON-RPC API (FastAPI/Uvicorn)
+      1. Asyncio event loop (background thread) for node self-ticking
+      2. NeighborFactory with event loop reference
+      3. REST API (FastAPI/Uvicorn, blocking)
     """
     logger.info("[*] Lunar Biscuit starting...")
 
-    # Create factory
-    factory = NeighborFactory()
-    set_factory(factory)
+    # Start asyncio event loop in background thread
+    loop_thread = AsyncEventLoopThread()
+    event_loop = loop_thread.start()
 
-    # Start simulation loop
-    sim_loop = SimulationLoop(factory, tick_interval=0.1)
-    sim_loop.start()
+    # Create factory and register it with the event loop
+    factory = NeighborFactory()
+    factory.set_event_loop(event_loop)
+    set_factory(factory)
 
     # Handle graceful shutdown
     def signal_handler(sig, frame):
         logger.info("[*] Shutdown signal received, cleaning up...")
-        sim_loop.stop()
+        loop_thread.stop()
         sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
@@ -97,10 +95,10 @@ def main() -> None:
 
     # Start API server (blocking)
     try:
-        run_api_server(host="127.0.0.1", port=8401)
+        run_api_server(host="0.0.0.0", port=8401)
     except KeyboardInterrupt:
         logger.info("[*] API server interrupted")
-        sim_loop.stop()
+        loop_thread.stop()
         sys.exit(0)
 
 
