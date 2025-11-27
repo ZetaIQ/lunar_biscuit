@@ -35,9 +35,14 @@ A modern WebGL visualizer (served from `radiant_chacha/api/json_rpc.py` and impl
 
 ### Python environment
 1. **Install dependencies**
-	```sh
-	pip install -r requirements.txt  # or use the dependencies listed in pyproject
-	```
+	 - Using [uv](https://github.com/astral-sh/uv) (reads `pyproject.toml`):
+		 ```sh
+		 uv pip install .
+		 ```
+	 - Using pip with the pinned requirements file:
+		 ```sh
+		 pip install -r requirements.txt
+		 ```
 
 2. **Configure parameters**
 	- Edit `radiant_chacha/config.py` to adjust:
@@ -63,6 +68,11 @@ This emits `visualizer.js` into `radiant_chacha/visualization/static/dist/`.
 ## Usage
 
 1. **Start the simulation service**
+	If you are using a virtual environment, activate it first:
+	```sh
+	source .venv/bin/activate  # adjust path/name as needed
+	```
+	Then run the service:
 	```sh
 	python main.py
 	```
