@@ -10,13 +10,18 @@ renderer.setClearColor(0x000000, 0);
 const scene = new THREE.Scene();
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
-camera.position.set(40, 35, 40);
+const defaultCameraPosition = new THREE.Vector3(40, 35, 40);
+const defaultCameraTarget = new THREE.Vector3(0, 0, 0);
+camera.position.copy(defaultCameraPosition);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.minDistance = 5;
 controls.maxDistance = 250;
+controls.target.copy(defaultCameraTarget);
+controls.update();
+controls.saveState();
 
 scene.add(new THREE.AmbientLight(0xffffff, 1.15));
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
@@ -144,6 +149,12 @@ const tablePanelElement = document.getElementById("table-panel");
 const collapseTableButton = document.getElementById("collapse-table");
 const tableTabButton = document.getElementById("table-tab");
 const tableResizer = document.getElementById("table-resizer");
+const paginationStatusLabel = document.getElementById("pagination-status");
+const rowsPerPageSelect = document.getElementById("rows-per-page");
+const paginationPrevButton = document.getElementById("pagination-prev");
+const paginationNextButton = document.getElementById("pagination-next");
+const tableElement = document.getElementById("node-table");
+const colgroupElement = document.getElementById("node-table-colgroup");
 const connectorVisibleCheckbox = document.getElementById("connector-visible");
 const connectorThicknessSlider = document.getElementById("connector-thickness");
 const motionSpeedSlider = document.getElementById("motion-speed");
@@ -154,6 +165,8 @@ const modalBackdrop = document.getElementById("modal-backdrop");
 const formModal = document.getElementById("control-panel");
 const resetFormButton = document.getElementById("reset-node-form");
 const pauseVisualizerButton = document.getElementById("pause-visualizer");
+const resetCameraButton = document.getElementById("reset-camera");
+const refitScaleButton = document.getElementById("refit-scale");
 const historyPanel = document.getElementById("history-panel");
 const historyNodeLabel = document.getElementById("history-node-label");
 const historyNodeAddr = document.getElementById("history-node-addr");
@@ -169,16 +182,24 @@ let selectedNodeId = null;
 let historyPollingHandle = null;
 let pointerDownSnapshot = null;
 let idToNodeMap = new Map();
-let idToAddressMap = new Map();
 let cameraTween = null;
 let currentPositionScale = 1;
+let positionScaleLocked = false;
 const TABLE_PANEL_STORAGE_KEY = "lunar-table-panel-height";
 const TABLE_PANEL_MIN_HEIGHT = 180;
+const TABLE_ROWS_PER_PAGE_KEY = "lunar-table-rows-per-page";
+const COLUMN_WIDTHS_STORAGE_KEY = "lunar-table-column-widths";
 const TARGET_SCENE_SPAN = 90;
 const MAX_POSITION_SCALE = 420;
 const CAMERA_FOCUS_MIN_DISTANCE = 8;
 const CAMERA_FOCUS_MAX_DISTANCE = 26;
 const CAMERA_TWEEN_DURATION = 650;
+const DEFAULT_ROWS_PER_PAGE = 50;
+const MIN_COLUMN_WIDTH = 60;
+let rowsPerPage = readStoredRowsPerPage();
+let currentPage = 1;
+const columnWidths = readStoredColumnWidths();
+let activeColumnResize = null;
 edgesGroup.visible = connectorVisibleCheckbox ? connectorVisibleCheckbox.checked : true;
 
 function readStoredTableHeight() {
@@ -203,6 +224,51 @@ function storeTableHeight(height) {
   }
 }
 
+function readStoredRowsPerPage() {
+  try {
+    const raw = window.localStorage.getItem(TABLE_ROWS_PER_PAGE_KEY);
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  } catch (error) {
+    console.warn("Failed to read rows-per-page", error);
+  }
+  return DEFAULT_ROWS_PER_PAGE;
+}
+
+function storeRowsPerPage(value) {
+  try {
+    window.localStorage.setItem(TABLE_ROWS_PER_PAGE_KEY, String(value));
+  } catch (error) {
+    console.warn("Failed to persist rows-per-page", error);
+  }
+}
+
+function readStoredColumnWidths() {
+  try {
+    const raw = window.localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch (error) {
+    console.warn("Failed to read column widths", error);
+  }
+  return {};
+}
+
+function storeColumnWidths(widthMap) {
+  try {
+    window.localStorage.setItem(COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(widthMap));
+  } catch (error) {
+    console.warn("Failed to persist column widths", error);
+  }
+}
+
 function clampTableHeight(value) {
   const maxHeight = Math.max(TABLE_PANEL_MIN_HEIGHT, window.innerHeight * 0.8);
   return Math.min(Math.max(value, TABLE_PANEL_MIN_HEIGHT), maxHeight);
@@ -213,6 +279,104 @@ function applyTableHeight(height) {
     return;
   }
   tablePanelElement.style.setProperty("--table-panel-height", `${height}px`);
+}
+
+function applyColumnWidths() {
+  if (!colgroupElement) {
+    return;
+  }
+  const columns = colgroupElement.querySelectorAll("col");
+  columns.forEach((col, index) => {
+    const width = columnWidths[index];
+    if (Number.isFinite(width) && width > 0) {
+      col.style.width = `${width}px`;
+    } else {
+      col.style.removeProperty("width");
+    }
+  });
+}
+
+function getColumnWidthFromDom(index) {
+  const storedWidth = columnWidths[index];
+  if (Number.isFinite(storedWidth) && storedWidth > 0) {
+    return storedWidth;
+  }
+  if (!tableElement) {
+    return 120;
+  }
+  const header = tableElement.querySelector(`thead th:nth-child(${index + 1})`);
+  return header ? header.getBoundingClientRect().width : 120;
+}
+
+function handleColumnResizeStart(event, columnIndex) {
+  event.preventDefault();
+  const startWidth = getColumnWidthFromDom(columnIndex);
+  activeColumnResize = {
+    columnIndex,
+    startX: event.clientX,
+    startWidth,
+  };
+  document.body.classList.add("resizing-column");
+  window.addEventListener("pointermove", handleColumnResizeMove);
+  window.addEventListener("pointerup", handleColumnResizeEnd);
+  window.addEventListener("pointercancel", handleColumnResizeEnd);
+}
+
+function handleColumnResizeMove(event) {
+  if (!activeColumnResize) {
+    return;
+  }
+  const delta = event.clientX - activeColumnResize.startX;
+  const width = Math.max(MIN_COLUMN_WIDTH, activeColumnResize.startWidth + delta);
+  columnWidths[activeColumnResize.columnIndex] = width;
+  applyColumnWidths();
+}
+
+function handleColumnResizeEnd() {
+  if (!activeColumnResize) {
+    return;
+  }
+  storeColumnWidths(columnWidths);
+  activeColumnResize = null;
+  document.body.classList.remove("resizing-column");
+  window.removeEventListener("pointermove", handleColumnResizeMove);
+  window.removeEventListener("pointerup", handleColumnResizeEnd);
+  window.removeEventListener("pointercancel", handleColumnResizeEnd);
+}
+
+function attachColumnResizers() {
+  if (!tableElement) {
+    return;
+  }
+  const headers = tableElement.querySelectorAll("thead th");
+  headers.forEach((th, index) => {
+    const existingHandle = th.querySelector(".col-resizer");
+    if (existingHandle) {
+      existingHandle.remove();
+    }
+    const handle = document.createElement("span");
+    handle.className = "col-resizer";
+    handle.title = "Drag to resize column";
+    handle.addEventListener("pointerdown", (event) => handleColumnResizeStart(event, index));
+    th.appendChild(handle);
+  });
+}
+
+function updatePaginationDisplay(totalNodes) {
+  const sanitizedRowsPerPage = Math.max(1, rowsPerPage || DEFAULT_ROWS_PER_PAGE);
+  const totalPages = totalNodes ? Math.max(1, Math.ceil(totalNodes / sanitizedRowsPerPage)) : 1;
+  currentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const start = totalNodes ? (currentPage - 1) * sanitizedRowsPerPage + 1 : 0;
+  const end = totalNodes ? Math.min(totalNodes, currentPage * sanitizedRowsPerPage) : 0;
+  if (paginationStatusLabel) {
+    paginationStatusLabel.textContent = `Showing ${start}–${end} of ${totalNodes} nodes`;
+  }
+  if (paginationPrevButton) {
+    paginationPrevButton.disabled = currentPage <= 1 || totalNodes === 0;
+  }
+  if (paginationNextButton) {
+    paginationNextButton.disabled = currentPage >= totalPages || totalNodes === 0;
+  }
 }
 
 function vectorFromArray(values) {
@@ -234,8 +398,7 @@ function getScaledPositionVector(values) {
 }
 
 function updatePositionScale(nodes) {
-  if (!Array.isArray(nodes) || !nodes.length) {
-    currentPositionScale = 1;
+  if (positionScaleLocked || !Array.isArray(nodes) || !nodes.length) {
     return;
   }
   let minX = Infinity;
@@ -271,6 +434,7 @@ function updatePositionScale(nodes) {
 
   if (!Number.isFinite(largestSpan) || largestSpan <= 0) {
     currentPositionScale = MAX_POSITION_SCALE;
+    positionScaleLocked = true;
     return;
   }
 
@@ -279,6 +443,7 @@ function updatePositionScale(nodes) {
     MAX_POSITION_SCALE,
     Math.max(1, desiredScale)
   );
+  positionScaleLocked = true;
 }
 
 function hashString(input = "") {
@@ -461,11 +626,16 @@ function formatVector(values, digits = 2) {
   return `[${parts.join(", ")}]`;
 }
 
-function resolveNeighborAddresses(ids) {
+function formatNeighborList(ids, previewLimit = 48) {
   if (!Array.isArray(ids) || ids.length === 0) {
-    return [];
+    return { full: "∅", preview: "∅" };
   }
-  return ids.map((neighborId) => idToAddressMap.get(neighborId) ?? `#${neighborId}`);
+  const labels = ids.map((neighborId) => `#${neighborId}`);
+  const full = labels.join(", ");
+  return {
+    full,
+    preview: truncate(full, previewLimit),
+  };
 }
 
 
@@ -503,22 +673,25 @@ function renderNodeTable(nodes) {
 
   if (!nodes.length) {
     tableBody.innerHTML = '<tr><td colspan="15">No nodes</td></tr>';
+    updatePaginationDisplay(0);
     return;
   }
 
-  const rows = nodes
-    .slice(0, 50)
+  const totalNodes = nodes.length;
+  const pageSize = Math.max(1, rowsPerPage || DEFAULT_ROWS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(totalNodes / pageSize));
+  currentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (currentPage - 1) * pageSize;
+  const visibleNodes = nodes.slice(startIndex, startIndex + pageSize);
+
+  const rows = visibleNodes
     .map((node) => {
       const addr = truncate(node.addr ?? "", 14);
       const { full: dataFull, short: dataShort } = formatDataSerialized(node);
       const dataType = node.data_type ?? "Unknown";
       const posText = formatVector(node.pos ?? []);
       const velText = formatVector(node.velocity ?? []);
-      const neighborAddresses = resolveNeighborAddresses(node.neighbors);
-      const neighborsText = neighborAddresses.length
-        ? neighborAddresses.map((addr) => truncate(addr, 16)).join(", ")
-        : "∅";
-      const neighborsFull = neighborAddresses.join(", ") || "∅";
+      const neighborsMeta = formatNeighborList(node.neighbors, 24);
       const gravityText = formatNumber(Number(node.gravity ?? NaN), 3);
       const connectionText = formatNumber(Number(node.connection_threshold ?? NaN), 3);
       const influenceText = formatNumber(Number(node.influence_radius ?? NaN), 3);
@@ -536,8 +709,8 @@ function renderNodeTable(nodes) {
           <td title="${escapeHtml(posText)}">${escapeHtml(posText)}</td>
           <td title="${escapeHtml(velText)}">${escapeHtml(velText)}</td>
           <td>${escapeHtml(gravityText)}</td>
-          <td title="${escapeHtml(neighborsFull)}">${escapeHtml(
-            truncate(neighborsText, 24)
+          <td title="${escapeHtml(neighborsMeta.full)}">${escapeHtml(
+            neighborsMeta.preview
           )}</td>
           <td>${escapeHtml(formatBoolean(!!node.is_anchor))}</td>
           <td>${escapeHtml(node.stability_window ?? "—")}</td>
@@ -548,6 +721,7 @@ function renderNodeTable(nodes) {
     .join("");
 
   tableBody.innerHTML = rows;
+  updatePaginationDisplay(totalNodes);
 }
 
 function activateNodeFromSnapshot(nodeId) {
@@ -582,6 +756,26 @@ function updateSelectionHighlight() {
     }
     mesh.material.emissiveIntensity = id === selectedNodeId ? 1.0 : 0.4;
   });
+}
+
+function refitPositionScale(nodes) {
+  if (!Array.isArray(nodes) || !nodes.length) {
+    return;
+  }
+  positionScaleLocked = false;
+  updatePositionScale(nodes);
+  nodeMeshes.forEach((mesh) => {
+    const node = mesh.userData.nodeMeta;
+    if (!node) {
+      return;
+    }
+    const targetVector = getScaledPositionVector(node.pos);
+    mesh.position.copy(targetVector);
+    mesh.userData.renderScale = mesh.userData.baseScale
+      ? mesh.userData.baseScale.clone().multiplyScalar(computeNeighborScale(node))
+      : mesh.scale;
+  });
+  rebuildEdges(cachedNodes);
 }
 
 function setHistoryMessage(message) {
@@ -709,9 +903,7 @@ function showTooltip(node, x, y) {
   const { full: dataFull } = formatDataSerialized(node);
   const posText = formatVector(node.pos ?? []);
   const velText = formatVector(node.velocity ?? []);
-  const neighborAddresses = resolveNeighborAddresses(node.neighbors);
-  const neighborsFull = neighborAddresses.join(", ") || "∅";
-  const neighborsPreview = truncate(neighborsFull, 48);
+  const neighborsMeta = formatNeighborList(node.neighbors);
   tooltip.style.display = "block";
   tooltip.style.left = `${x + 14}px`;
   tooltip.style.top = `${y + 14}px`;
@@ -730,7 +922,7 @@ function showTooltip(node, x, y) {
     Attempts: ${escapeHtml(node.attempts ?? 0)} · Anchor: ${escapeHtml(
       formatBoolean(!!node.is_anchor)
     )}<br />
-    Neighbors: ${escapeHtml(neighborsPreview)}
+    Neighbors: ${escapeHtml(neighborsMeta.preview)}
   `;
 }
 
@@ -811,7 +1003,6 @@ function applyPayload(payload) {
   const nodes = payload.nodes ?? [];
   cachedNodes = nodes;
   idToNodeMap = new Map(nodes.map((node) => [node.id, node]));
-  idToAddressMap = new Map(nodes.map((node) => [node.id, node.addr]));
   window.__lunarLastPayload = payload; // exposed for debugging
   console.debug("Visualizer payload", { count: nodes.length, sample: nodes[0] });
   updatePositionScale(nodes);
@@ -902,6 +1093,11 @@ function focusCameraOnNode(nodeId) {
     startTarget: controls.target.clone(),
     endTarget: targetPos,
   };
+}
+
+function resetCameraView() {
+  cameraTween = null;
+  controls.reset();
 }
 
 function animate() {
@@ -1228,6 +1424,14 @@ pauseVisualizerButton?.addEventListener("click", () => {
   setPauseState(!isPaused);
 });
 
+resetCameraButton?.addEventListener("click", () => {
+  resetCameraView();
+});
+
+refitScaleButton?.addEventListener("click", () => {
+  refitPositionScale(cachedNodes);
+});
+
 historyCloseButton?.addEventListener("click", () => {
   closeHistoryPanel();
 });
@@ -1261,6 +1465,51 @@ tableTabButton?.addEventListener("click", () => {
 if (tableResizer) {
   tableResizer.addEventListener("pointerdown", handleTableResizeStart);
 }
+
+if (rowsPerPageSelect) {
+  const optionValues = Array.from(rowsPerPageSelect.options).map((option) => Number(option.value));
+  if (optionValues.includes(rowsPerPage)) {
+    rowsPerPageSelect.value = String(rowsPerPage);
+  } else {
+    const fallback = optionValues.includes(DEFAULT_ROWS_PER_PAGE)
+      ? DEFAULT_ROWS_PER_PAGE
+      : optionValues.find((value) => Number.isFinite(value) && value > 0) ?? DEFAULT_ROWS_PER_PAGE;
+    rowsPerPage = fallback;
+    rowsPerPageSelect.value = String(fallback);
+  }
+  rowsPerPageSelect.addEventListener("change", (event) => {
+    const value = Number(event.target.value);
+    if (!Number.isFinite(value) || value <= 0) {
+      return;
+    }
+    rowsPerPage = value;
+    storeRowsPerPage(rowsPerPage);
+    currentPage = 1;
+    renderNodeTable(cachedNodes);
+  });
+}
+
+paginationPrevButton?.addEventListener("click", () => {
+  if (currentPage <= 1) {
+    return;
+  }
+  currentPage -= 1;
+  renderNodeTable(cachedNodes);
+});
+
+paginationNextButton?.addEventListener("click", () => {
+  const pageSize = Math.max(1, rowsPerPage || DEFAULT_ROWS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(Math.max(0, cachedNodes.length) / pageSize));
+  if (currentPage >= totalPages) {
+    return;
+  }
+  currentPage += 1;
+  renderNodeTable(cachedNodes);
+});
+
+attachColumnResizers();
+applyColumnWidths();
+updatePaginationDisplay(cachedNodes.length);
 
 tableBody?.addEventListener("click", (event) => {
   const row = event.target.closest("tr[data-node-id]");

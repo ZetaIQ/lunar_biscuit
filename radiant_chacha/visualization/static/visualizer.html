@@ -148,7 +148,9 @@
       gap: 8px;
     }
     #open-node-form,
-    #pause-visualizer {
+    #pause-visualizer,
+    #reset-camera,
+    #refit-scale {
       flex: 1;
       min-width: 120px;
       padding: 8px 16px;
@@ -163,7 +165,9 @@
       transition: background 0.2s ease;
     }
     #open-node-form:hover,
-    #pause-visualizer:hover {
+    #pause-visualizer:hover,
+    #reset-camera:hover,
+    #refit-scale:hover {
       background: rgba(255, 255, 255, 0.12);
     }
     #pause-visualizer.active {
@@ -275,6 +279,7 @@
       width: 100%;
       border-collapse: collapse;
       font-size: 12px;
+      table-layout: fixed;
     }
     .table-resizer {
       width: 100%;
@@ -300,9 +305,80 @@
       white-space: nowrap;
       text-overflow: ellipsis;
       overflow: hidden;
+      position: relative;
     }
     tbody tr:last-child td {
       border-bottom: none;
+    }
+    th .col-resizer {
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 6px;
+      height: 100%;
+      cursor: col-resize;
+      user-select: none;
+    }
+    body.resizing-column {
+      cursor: col-resize;
+      user-select: none;
+    }
+    .table-footer {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 12px;
+    }
+    .pagination-status {
+      color: #d8e0ff;
+      letter-spacing: 0.04em;
+    }
+    .pagination-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .rows-per-page {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #9fb5ff;
+    }
+    .rows-per-page select {
+      width: auto;
+      min-width: 70px;
+      font-size: 12px;
+    }
+    .pagination-buttons {
+      display: flex;
+      gap: 6px;
+    }
+    .pagination-buttons button {
+      width: auto;
+      min-width: 90px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.06);
+      color: #f5f5f5;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .pagination-buttons button:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.12);
+    }
+    .pagination-buttons button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
     #tooltip {
       position: fixed;
@@ -504,6 +580,8 @@
     <div class="overlay-actions">
       <button id="open-node-form">Create Node</button>
       <button id="pause-visualizer" class="secondary-button" type="button">Pause</button>
+      <button id="reset-camera" class="secondary-button" type="button">Reset Camera</button>
+      <button id="refit-scale" class="secondary-button" type="button">Refit Scale</button>
     </div>
     <div class="connector-controls">
       <span class="field-label">Connectors</span>
@@ -538,6 +616,23 @@
     <div id="table-resizer" class="table-resizer">⋮</div>
     <div class="table-wrapper">
       <table id="node-table">
+        <colgroup id="node-table-colgroup">
+          <col data-column-index="0" />
+          <col data-column-index="1" />
+          <col data-column-index="2" />
+          <col data-column-index="3" />
+          <col data-column-index="4" />
+          <col data-column-index="5" />
+          <col data-column-index="6" />
+          <col data-column-index="7" />
+          <col data-column-index="8" />
+          <col data-column-index="9" />
+          <col data-column-index="10" />
+          <col data-column-index="11" />
+          <col data-column-index="12" />
+          <col data-column-index="13" />
+          <col data-column-index="14" />
+        </colgroup>
         <thead>
           <tr>
             <th>ID</th>
@@ -561,6 +656,24 @@
           <tr><td colspan="15">Waiting for data…</td></tr>
         </tbody>
       </table>
+    </div>
+    <div class="table-footer">
+      <div id="pagination-status" class="pagination-status">Showing 0–0 of 0 nodes</div>
+      <div class="pagination-controls">
+        <label class="rows-per-page">
+          Rows
+          <select id="rows-per-page" name="rows-per-page">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="250">250</option>
+          </select>
+        </label>
+        <div class="pagination-buttons">
+          <button id="pagination-prev" type="button">Previous</button>
+          <button id="pagination-next" type="button">Next</button>
+        </div>
+      </div>
     </div>
   </div>
   <button id="table-tab" class="table-tab" type="button">Show Nodes</button>

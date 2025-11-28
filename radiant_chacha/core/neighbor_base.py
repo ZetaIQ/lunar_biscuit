@@ -82,12 +82,18 @@ class NeighborBase(NeighborProtocol, ABC):
 
     # --- Neighbors list ---
     neighbors: list["NeighborProtocol"] = field(default_factory=list)
+    neighbors_by_similarity: list[tuple[float, "NeighborBase"]] = field(
+        default_factory=list
+    )
 
     # Spheres are anchors, blocks and points are not
     is_anchor: bool = False
 
+    # Indicates whether the node is currently willing to replace low-similarity neighbors
+    permissive_mode: bool = False
+
     # --- Snapshots of states after changes ---
-    history: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    history: list[dict[str, Any]] = field(default_factory=list)
 
     # Max number of positions to reference when calculating stability
     STABILITY_WINDOW: int = 10

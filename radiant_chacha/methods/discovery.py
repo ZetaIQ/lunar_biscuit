@@ -1,6 +1,13 @@
 from typing import TYPE_CHECKING
 
-from radiant_chacha.methods import add_neighbor, can_accept_more_neighbors
+from radiant_chacha.methods import (
+    add_neighbor,
+    can_accept_more_neighbors,
+    evict_weakest_neighbor,
+    register_neighbor_attempt_failure,
+    remove_neighbor,
+    restore_neighbor,
+)
 from radiant_chacha.methods.similarity import should_connect
 from radiant_chacha.utils.log_handler import get_logger
 
@@ -33,13 +40,13 @@ def discover_and_negotiate(obj: "NeighborBase") -> None:
             )
             continue
         # stop if this node can't accept more neighbors
-        if not can_accept_more_neighbors(obj=obj):
-            logger.info(f"{obj.type}: {obj.addr} full, stop discovery")
+        node_is_full = not can_accept_more_neighbors(obj=obj)
+        if node_is_full and not obj.permissive_mode:
             logger.debug(
-                f"{obj.type}: {obj.addr} neighbors: {[n.addr[:8] for n in obj.neighbors]}"
+                f"{obj.type}: {obj.addr} saturated (neighbors: {[n.addr[:8] for n in obj.neighbors]})"
             )
-            logger.debug(f"{obj.type}: {obj.addr} total attempt count: {obj.attempts}")
-            break
+            register_neighbor_attempt_failure(obj)
+            continue
 
         ok, score = should_connect(
             obj=obj, other=cand, threshold=obj.connection_threshold
@@ -57,8 +64,69 @@ def discover_and_negotiate(obj: "NeighborBase") -> None:
         logger.info(
             f"Attempting to connect {obj.type}: {obj.addr} to candidate: {cand.type}: {cand.addr} with score {score:.3f}"
         )
-        add_neighbor(obj=obj, other=cand)
-        add_neighbor(obj=cand, other=obj)
+        evicted_self = None
+        evicted_cand = None
+
+        if node_is_full:
+            evicted_self = evict_weakest_neighbor(obj=obj, incoming_score=score)
+            if not evicted_self:
+                logger.debug(
+                    f"{obj.type}: {obj.addr} candidate score {score:.3f} insufficient to replace weakest neighbor"
+                )
+                continue
+            weakest_score, weakest_neighbor = evicted_self
+            logger.info(
+                f"{obj.type}: {obj.addr} replacing neighbor {weakest_neighbor.type}:{weakest_neighbor.addr[:8]} with candidate {cand.type}:{cand.addr[:8]} (score {score:.3f} > {weakest_score:.3f})"
+            )
+
+        cand_is_full = not can_accept_more_neighbors(obj=cand)
+        if cand_is_full and not cand.permissive_mode:
+            if evicted_self:
+                restore_neighbor(obj=obj, other=evicted_self[1], score=evicted_self[0])
+            logger.debug(
+                f"{obj.type}: {obj.addr} skipping candidate {cand.id} because it cannot reciprocate"
+            )
+            register_neighbor_attempt_failure(cand)
+            continue
+
+        if cand_is_full:
+            evicted_cand = evict_weakest_neighbor(obj=cand, incoming_score=score)
+            if not evicted_cand:
+                if evicted_self:
+                    restore_neighbor(
+                        obj=obj, other=evicted_self[1], score=evicted_self[0]
+                    )
+                logger.debug(
+                    f"{cand.type}: {cand.addr} failed to free capacity despite permissive mode"
+                )
+                register_neighbor_attempt_failure(cand)
+                continue
+
+        added_self = add_neighbor(obj=obj, other=cand, score=score)
+        if not added_self:
+            logger.debug(
+                f"{obj.type}: {obj.addr} failed to add candidate {cand.type}:{cand.addr[:8]}"
+            )
+            if evicted_self:
+                restore_neighbor(obj=obj, other=evicted_self[1], score=evicted_self[0])
+            if evicted_cand:
+                restore_neighbor(obj=cand, other=evicted_cand[1], score=evicted_cand[0])
+            register_neighbor_attempt_failure(obj)
+            continue
+
+        added_cand = add_neighbor(obj=cand, other=obj, score=score)
+        if not added_cand:
+            logger.debug(
+                f"{cand.type}: {cand.addr} failed to accept reciprocal neighbor {obj.type}:{obj.addr[:8]}"
+            )
+            remove_neighbor(obj=obj, other=cand)
+            if evicted_self:
+                restore_neighbor(obj=obj, other=evicted_self[1], score=evicted_self[0])
+            if evicted_cand:
+                restore_neighbor(obj=cand, other=evicted_cand[1], score=evicted_cand[0])
+            register_neighbor_attempt_failure(cand)
+            continue
+
         # record negotiation result in history
         try:
             obj.history[-1]["neighbor_event"] = {

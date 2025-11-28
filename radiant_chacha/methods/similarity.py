@@ -26,8 +26,8 @@ logger = get_logger(__name__, source_file=__file__)
 def _cosine_similarity(a: "np.ndarray", b: "np.ndarray") -> float:
     if np is None:
         return 0.0
-    a_f = a.astype(float)
-    b_f = b.astype(float)
+    a_f = np.ravel(a.astype(float))
+    b_f = np.ravel(b.astype(float))
     denom = np.linalg.norm(a_f) * np.linalg.norm(b_f)
     if denom == 0:
         return 0.0
